@@ -43,7 +43,7 @@ func Even(position Position) *Verifier {
 		Verify: func(n ...int) bool {
 			return n[position]%2 == 0
 		},
-		Description: fmt.Sprintf("pos %v is even", position),
+		Description: fmt.Sprintf("%v is even", position),
 	}
 }
 
@@ -52,7 +52,7 @@ func Odd(position Position) *Verifier {
 		Verify: func(n ...int) bool {
 			return n[position]%2 == 1
 		},
-		Description: fmt.Sprintf("pos %v is odd", position),
+		Description: fmt.Sprintf("%v is odd", position),
 	}
 }
 
@@ -72,30 +72,30 @@ func NumberAppearsTimes(numberToCount, appearsTimes int) *Verifier {
 	}
 }
 
-func PositionLessThanPosition(position Position, isLessThanPosition int) *Verifier {
+func PositionLessThanPosition(position Position, isLessThanPosition Position) *Verifier {
 	return &Verifier{
 		Verify: func(n ...int) bool {
 			return n[position] < n[isLessThanPosition]
 		},
-		Description: fmt.Sprintf("pos %v < pos %v", position, isLessThanPosition),
+		Description: fmt.Sprintf("%v < %v", position, isLessThanPosition),
 	}
 }
 
-func PositionGreaterThanPosition(position Position, isGreaterThanPosition int) *Verifier {
+func PositionGreaterThanPosition(position Position, isGreaterThanPosition Position) *Verifier {
 	return &Verifier{
 		Verify: func(n ...int) bool {
 			return n[position] > n[isGreaterThanPosition]
 		},
-		Description: fmt.Sprintf("pos %v > pos %v", position, isGreaterThanPosition),
+		Description: fmt.Sprintf("%v > %v", position, isGreaterThanPosition),
 	}
 }
 
-func PositionEqualsPosition(position Position, isEqualToPosition int) *Verifier {
+func PositionEqualsPosition(position Position, isEqualToPosition Position) *Verifier {
 	return &Verifier{
 		Verify: func(n ...int) bool {
 			return n[position] == n[isEqualToPosition]
 		},
-		Description: fmt.Sprintf("pos %v = pos %v", position, isEqualToPosition),
+		Description: fmt.Sprintf("%v = %v", position, isEqualToPosition),
 	}
 }
 
@@ -111,7 +111,7 @@ func PositionIsSmallest(position Position) *Verifier {
 
 			return true
 		},
-		Description: fmt.Sprintf("pos %v is smallest", position),
+		Description: fmt.Sprintf("%v is smallest", position),
 	}
 }
 
@@ -127,7 +127,7 @@ func PositionIsSmallestOrEqual(position Position) *Verifier {
 
 			return true
 		},
-		Description: fmt.Sprintf("pos %v is smallest or equal", position),
+		Description: fmt.Sprintf("%v is smallest or equal", position),
 	}
 }
 
@@ -143,7 +143,7 @@ func PositionIsLargest(position Position) *Verifier {
 
 			return true
 		},
-		Description: fmt.Sprintf("pos %v is largest", position),
+		Description: fmt.Sprintf("%v is largest", position),
 	}
 }
 
@@ -159,7 +159,7 @@ func PositionIsLargestOrEqual(position Position) *Verifier {
 
 			return true
 		},
-		Description: fmt.Sprintf("pos %v is largest or equal", position),
+		Description: fmt.Sprintf("%v is largest or equal", position),
 	}
 }
 
