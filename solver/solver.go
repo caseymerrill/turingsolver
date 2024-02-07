@@ -3,6 +3,7 @@ package solver
 import (
 	"fmt"
 	"log"
+	"slices"
 	"sync"
 
 	"github.com/caseymerrill/turingsolver/game"
@@ -29,20 +30,16 @@ func NewSolver(gameToSolve game.Game, progressCallback ProgressCallback) *Solver
 
 func (s *Solver) Solve() Solution {
 	s.solutions = s.initialSolutions()
-
-	progressReport := fmt.Sprintf("Found %v initial solutions:\n", len(s.solutions))
-	for _, solution := range s.solutions {
-		progressReport += fmt.Sprintf("  %v\n", solution)
-	}
-	s.progressCallback(progressReport)
+	s.progressReport()
 
 	for len(s.solutions) > 0 && !s.hasSolution() {
 		code := s.bestCodeToAsk()
 		s.codesTested += 1
 
 		for i := 0; i < 3; i++ {
-			verifier := s.bestVerifiersToAsk()
+			verifier := s.bestVerifiersToAsk(code)
 			if verifier == -1 {
+				s.progressCallback("Passing, no useful validators for code")
 				break
 			}
 
@@ -50,19 +47,36 @@ func (s *Solver) Solve() Solution {
 			s.questionsAsked += 1
 			s.solutions = s.adjustSolutions(code, verifier, valid)
 			if s.hasSolution() {
+				s.finalReport()
 				return s.solutions[0]
 			}
+
+			s.progressReport()
 		}
 	}
 
 	if len(s.solutions) == 0 {
 		log.Fatal("No solutions found")
 	} else {
-		progressReport = fmt.Sprintf("Found solution after testing %v codes and asking %v questions:\n", s.codesTested, s.questionsAsked)
-		s.progressCallback(progressReport)
+		resultReport := fmt.Sprintf("Found solution after testing %v codes and asking %v questions:\n", s.codesTested, s.questionsAsked)
+		s.progressCallback(resultReport)
 	}
 
+	s.finalReport()
 	return s.solutions[0]
+}
+
+func (s *Solver) progressReport() {
+	progressReport := fmt.Sprintf("Found %v solutions:\n", len(s.solutions))
+	for _, solution := range s.solutions {
+		progressReport += fmt.Sprintf("  %v\n", solution)
+	}
+	s.progressCallback(progressReport)
+}
+
+func (s *Solver) finalReport() {
+	resultReport := fmt.Sprintf("Found solution after testing %v codes and asking %v questions:\n", s.codesTested, s.questionsAsked)
+	s.progressCallback(resultReport)
 }
 
 // hasSolution returns true if all possible solutions use the same code
@@ -97,18 +111,75 @@ func (s *Solver) verifierCasesToSolve() []set.Set[*verifiers.Verifier] {
 }
 
 func (s *Solver) bestCodeToAsk() []int {
-	return s.solutions[0].Code
+	return s.mostEliminatedCases()
 }
 
-func (s *Solver) bestVerifiersToAsk() int {
-	toSolve := s.verifierCasesToSolve()
-	for i := range toSolve {
-		if len(toSolve[i]) > 1 {
-			return i
+// mostEliminatedCases returns the code that could potentially eliminate the most cases (without goign to zero), based on the top three verifiers
+func (s *Solver) mostEliminatedCases() []int {
+	codes, cleanup := possibleCodes()
+	defer cleanup()
+	var bestCode []int
+	var bestScore int
+	currentSolutaionCount := len(s.solutions)
+	for code := range codes {
+		verifierScores := make([]int, len(s.game.GetVerifierCards()))
+		for i := range s.game.GetVerifierCards() {
+			score := 0
+
+			ifValidSolutionCount := len(s.adjustSolutions(code, i, true))
+			if ifValidSolutionCount > 0 {
+				score += currentSolutaionCount - len(s.adjustSolutions(code, i, true))
+			}
+
+			ifInvalidSolutionCount := len(s.adjustSolutions(code, i, false))
+			if ifInvalidSolutionCount > 0 {
+				score += currentSolutaionCount - len(s.adjustSolutions(code, i, false))
+			}
+
+			verifierScores[i] = score
+		}
+
+		slices.Sort(verifierScores)
+		codeScore := 0
+		for _, verifierScore := range verifierScores[len(verifierScores)-3:] {
+			codeScore += verifierScore
+		}
+
+		if codeScore > bestScore {
+			bestScore = codeScore
+			bestCode = code
 		}
 	}
 
-	return -1
+	return bestCode
+}
+
+func (s *Solver) firstCode() []int {
+	return s.solutions[0].Code
+}
+
+func (s *Solver) bestVerifiersToAsk(code []int) int {
+	bestVerifierIndex := -1
+	bestVerifierScore := 0
+	for i := range s.game.GetVerifierCards() {
+		score := 0
+		ifValidSolutionCount := len(s.adjustSolutions(code, i, true))
+		if ifValidSolutionCount > 0 {
+			score += len(s.solutions) - ifValidSolutionCount
+		}
+
+		ifInvalidSolutionCount := len(s.adjustSolutions(code, i, false))
+		if ifInvalidSolutionCount > 0 {
+			score += len(s.solutions) - ifInvalidSolutionCount
+		}
+
+		if score > bestVerifierScore {
+			bestVerifierScore = score
+			bestVerifierIndex = i
+		}
+	}
+
+	return bestVerifierIndex
 }
 
 func (s *Solver) adjustSolutions(code []int, verifierIndex int, valid bool) []Solution {
@@ -121,7 +192,7 @@ func (s *Solver) adjustSolutions(code []int, verifierIndex int, valid bool) []So
 
 	newSolutions := make([]Solution, 0, len(s.solutions))
 	for _, solution := range s.solutions {
-		if !verifiersToKeep.Contains(solution.Verifiers[verifierIndex]) {
+		if verifiersToKeep.Contains(solution.Verifiers[verifierIndex]) {
 			newSolutions = append(newSolutions, solution)
 		}
 	}
