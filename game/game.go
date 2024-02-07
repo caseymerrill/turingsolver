@@ -8,7 +8,7 @@ import (
 
 type Game interface {
 	fmt.Stringer
-	GetVerifierCards() []verifiers.VerifierCard
+	GetVerifierCards() []*verifiers.VerifierCard
 	AskQuestion(code []int, verifier int) bool
 	MakeGuess(code []int) bool
 }

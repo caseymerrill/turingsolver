@@ -1,6 +1,9 @@
 package verifiers
 
-import "fmt"
+import (
+	"fmt"
+	"slices"
+)
 
 type Verifier struct {
 	Verify      func(n ...int) bool
@@ -246,19 +249,12 @@ func SumOfTwoPositionsGreaterThanNumber(position1, position2 Position, greaterTh
 func RepeatsTimes(repeatsTimes int) *Verifier {
 	return &Verifier{
 		Verify: func(n ...int) bool {
-			counts := make(map[int]int)
+			counts := make([]int, 5)
 			for _, number := range n {
-				counts[number] += 1
+				counts[number-1] += 1
 			}
 
-			max := 0
-			for _, count := range counts {
-				if count > max {
-					max = count
-				}
-			}
-
-			return max == repeatsTimes
+			return slices.Max(counts) == repeatsTimes
 		},
 		Description: fmt.Sprintf("any number repeats %v times", repeatsTimes),
 	}

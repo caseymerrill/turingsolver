@@ -9,16 +9,16 @@ import (
 )
 
 type InteractiveGame struct {
-	cards []verifiers.VerifierCard
+	cards []*verifiers.VerifierCard
 }
 
-func NewInteractiveGame(cards []verifiers.VerifierCard) Game {
+func NewInteractiveGame(cards []*verifiers.VerifierCard) Game {
 	return &InteractiveGame{
 		cards: cards,
 	}
 }
 
-func (g *InteractiveGame) GetVerifierCards() []verifiers.VerifierCard {
+func (g *InteractiveGame) GetVerifierCards() []*verifiers.VerifierCard {
 	return g.cards
 }
 

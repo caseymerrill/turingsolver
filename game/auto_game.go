@@ -1,55 +1,57 @@
 package game
 
-/**
 import (
+	"fmt"
 	"strings"
 
 	"github.com/caseymerrill/turingsolver/verifiers"
 )
 
 type AutoGame struct {
-	VerifierCards []verifiers.VerifierCard
-	realVerifiers []verifiers.Verifier
-	realCode      []int
+	verifierCards  []*verifiers.VerifierCard
+	actualVerfiers []*verifiers.Verifier
+	actualCode     []int
 }
 
-func NewGame(cards []verifiers.VerifierCard, realVerifiers []verifiers.Verifier, realCode []int) *Game {
+func NewAutoGame(verifierCards []*verifiers.VerifierCard, actualVerifiers []*verifiers.Verifier, actualCode []int) *AutoGame {
 	return &AutoGame{
-		VerifierCards: cards,
-		realVerifiers: realVerifiers,
-		realCode:      realCode,
+		verifierCards:  verifierCards,
+		actualVerfiers: actualVerifiers,
+		actualCode:     actualCode,
 	}
 }
 
-func (g *Game) String() string {
+func (g *AutoGame) String() string {
 	description := ""
-	for _, card := range g.VerifierCards {
+	for cardIndex, card := range g.verifierCards {
 		verifierDescriptions := make([]string, len(card.Verifiers))
 		for i, verifier := range card.Verifiers {
 			verifierDescriptions[i] = verifier.Description
 		}
-		description += strings.Join(verifierDescriptions, " | ")
-		description += "\n\n"
+		description += fmt.Sprintf("Verifier %v: %v\n", cardIndex + 1, strings.Join(verifierDescriptions, " | "))
 	}
 
 	return description
 }
 
-func (g *Game) RunVerifier(code []int, verifier int) bool {
-	return g.realVerifiers[verifier].Verify(code...)
+func (g *AutoGame) GetVerifierCards() []*verifiers.VerifierCard {
+	return g.verifierCards
 }
 
-func (g *Game) MakeGuess(code []int) bool {
-	if len(code) != len(g.realCode) {
+func (g *AutoGame) AskQuestion(code []int, verifier int) bool {
+	return g.actualVerfiers[verifier].Verify(code...)
+}
+
+func (g *AutoGame) MakeGuess(code []int) bool {
+	if len(code) != len(g.actualCode) {
 		return false
 	}
 
-	for i, n := range code {
-		if n != g.realCode[i] {
+	for i := range code {
+		if code[i] != g.actualCode[i] {
 			return false
 		}
 	}
 
 	return true
 }
-*/

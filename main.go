@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"runtime/pprof"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/caseymerrill/turingsolver/game"
+	"github.com/caseymerrill/turingsolver/game_generator"
 	"github.com/caseymerrill/turingsolver/solver"
 	"github.com/caseymerrill/turingsolver/verifiers"
 	"github.com/docopt/docopt-go"
@@ -17,18 +20,35 @@ import (
 const docString = `TuringSolver
 
 Usage:
-  turingsolver [--interactive]
+  turingsolver --interactive
+  turingsolver --gen=<number-of-games> [--n-cards=<number-of-cards>] [--profile]
   turingsolver --print-cards
   
  Options:
-  -h --help      Show this screen.
-  --print-cards  Print the available verifier cards.
-  --interactive  Run the game in interactive mode.`
+  -h --help                    Show this screen.
+  --print-cards                Print the available verifier cards.
+  --interactive                Run the game in interactive mode.
+  --gen=<number-of-games>      Generate <number-of-games> games.
+  --n-cards=<number-of-cards>  Generate games with <number-of-cards> verifiers.
+  --profile					   Run with CPU profiler.`
 
 func main() {
 	opts, err := docopt.ParseDoc(docString)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	profile, _ := opts.Bool("--profile")
+	if profile {
+		profileFilename := os.Args[0] + ".prof"
+		fmt.Println("Profiling Enabled. Writing to", profileFilename)
+		profileOutput, err := os.Create(profileFilename)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		pprof.StartCPUProfile(profileOutput)
+		defer pprof.StopCPUProfile()
 	}
 
 	printCards, _ := opts.Bool("--print-cards")
@@ -37,26 +57,45 @@ func main() {
 		return
 	}
 
-	var game game.Game
 	interactive, _ := opts.Bool("--interactive")
 	if interactive {
-		game = createInteractiveGame()
-	} else {
-		log.Fatal("non-interactive not implemented")
+		var interactiveGame game.Game
+		interactiveGame = createInteractiveGame()
+		solver := solver.NewSolver(interactiveGame, func(progress string) {
+			fmt.Println(progress)
+		})
+		solution := solver.Solve()
+		fmt.Println("Solution:", solution)
 	}
 
-	fmt.Println(game)
+	generateGames, _ := opts.Int("--gen")
+	if generateGames > 0 {
+		nVerifiers, _ := opts.Int("--n-cards")
+		if nVerifiers == 0 {
+			nVerifiers = 4
+		}
 
-	solver := solver.NewSolver(game, func(progress string) {
-		fmt.Println(progress)
-	})
-	solution := solver.Solve()
-	fmt.Println("Solution:", solution)
+		// games := make([]game.Game, generateGames)
+		wg := sync.WaitGroup{}
+		for i := 0; i < generateGames; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				gameToSolve := game_generator.GenerateGame(nVerifiers)
+				solver := solver.NewSolver(gameToSolve, func(progress string) {})
+				solver.Solve()
+				// codesTested, questionsAsked := solver.Score()
+				// fmt.Printf("Solution: %v\nCodes tested: %v\nQuestions asked: %v\n\n", solution, codesTested, questionsAsked)
+			}()
+		}
+
+		wg.Wait()
+	}
 }
 
 func createInteractiveGame() game.Game {
 	const prompt = "Add verifiers (blank to stop, - to remove previous): "
-	cards := []verifiers.VerifierCard{}
+	cards := []*verifiers.VerifierCard{}
 	reader := bufio.NewScanner(os.Stdin)
 	for {
 		fmt.Print(prompt)
@@ -88,7 +127,7 @@ func createInteractiveGame() game.Game {
 		}
 
 		fmt.Println("Adding: ", verifiers.Cards[cardNumber-1])
-		cards = append(cards, verifiers.Cards[cardNumber-1])
+		cards = append(cards, &verifiers.Cards[cardNumber-1])
 	}
 
 	if reader.Err() != nil {

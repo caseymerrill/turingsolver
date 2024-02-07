@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"slices"
-	"sync"
 
 	"github.com/caseymerrill/turingsolver/game"
 	"github.com/caseymerrill/turingsolver/set"
@@ -29,7 +28,7 @@ func NewSolver(gameToSolve game.Game, progressCallback ProgressCallback) *Solver
 }
 
 func (s *Solver) Solve() Solution {
-	s.solutions = s.initialSolutions()
+	s.solutions = s.InitialSolutions()
 	s.progressReport()
 
 	for len(s.solutions) > 0 && !s.hasSolution() {
@@ -66,6 +65,37 @@ func (s *Solver) Solve() Solution {
 	return s.solutions[0]
 }
 
+func (s *Solver) InitialSolutions() []Solution {
+	solutions := make([]Solution, 0)
+	for _, verifierPermutation := range s.getAllVerifierPermutations() {
+		var validCode []int
+		for _, code := range possibleCodes {
+			if verifyCode(code, verifierPermutation) {
+				if validCode != nil {
+					// One solution per valid verifier permutation
+					validCode = nil
+					break
+				}
+
+				validCode = code
+			}
+		}
+
+		if validCode != nil && allValidatorsUseful(verifierPermutation) {
+			solutions = append(solutions, Solution{
+				Code:      validCode,
+				Verifiers: verifierPermutation,
+			})
+		}
+	}
+
+	return solutions
+}
+
+func (s *Solver) Score() (int, int) {
+	return s.codesTested, s.questionsAsked
+}
+
 func (s *Solver) progressReport() {
 	progressReport := fmt.Sprintf("Found %v solutions:\n", len(s.solutions))
 	for _, solution := range s.solutions {
@@ -97,31 +127,16 @@ func (s *Solver) hasSolution() bool {
 	return true
 }
 
-func (s *Solver) verifierCasesToSolve() []set.Set[*verifiers.Verifier] {
-	cards := s.game.GetVerifierCards()
-	result := make([]set.Set[*verifiers.Verifier], len(cards))
-	for i := range cards {
-		result[i] = set.Make[*verifiers.Verifier]()
-		for _, solution := range s.solutions {
-			result[i].Add(solution.Verifiers[i])
-		}
-	}
-
-	return result
-}
-
 func (s *Solver) bestCodeToAsk() []int {
 	return s.mostEliminatedCases()
 }
 
 // mostEliminatedCases returns the code that could potentially eliminate the most cases (without goign to zero), based on the top three verifiers
 func (s *Solver) mostEliminatedCases() []int {
-	codes, cleanup := possibleCodes()
-	defer cleanup()
 	var bestCode []int
 	var bestScore int
 	currentSolutaionCount := len(s.solutions)
-	for code := range codes {
+	for _, code := range possibleCodes {
 		verifierScores := make([]int, len(s.game.GetVerifierCards()))
 		for i := range s.game.GetVerifierCards() {
 			score := 0
@@ -200,52 +215,19 @@ func (s *Solver) adjustSolutions(code []int, verifierIndex int, valid bool) []So
 	return newSolutions
 }
 
-func (s *Solver) initialSolutions() []Solution {
-	solutions := make([]Solution, 0)
-	for _, verifierPermutation := range s.getAllVerifierPermutations() {
-		var validCode []int
-		codes, cleanupCodes := possibleCodes()
-		defer cleanupCodes()
-		for code := range codes {
-			if verifyCode(code, verifierPermutation) {
-				if validCode != nil {
-					// One solution per valid verifier permutation
-					validCode = nil
-					break
-				}
-
-				validCode = code
-			}
-		}
-		cleanupCodes()
-
-		if validCode != nil && allValidatorsUseful(verifierPermutation) {
-			solutions = append(solutions, Solution{
-				Code:      validCode,
-				Verifiers: verifierPermutation,
-			})
-		}
-	}
-
-	return solutions
-}
-
 func allValidatorsUseful(verifierPermutation []*verifiers.Verifier) bool {
 	for i := range verifierPermutation {
 		holdout := make([]*verifiers.Verifier, len(verifierPermutation)-1)
 		copy(holdout, verifierPermutation[:i])
 		copy(holdout[i:], verifierPermutation[i+1:])
-		codes, cleanup := possibleCodes()
-		defer cleanup()
 		validCodes := 0
-		for code := range codes {
+		for _, code := range possibleCodes {
 			if verifyCode(code, holdout) {
 				validCodes += 1
 			}
 
 			if validCodes > 1 {
 				// The withheld verifier is useful
-				cleanup()
 				break
 			}
 		}
@@ -279,30 +261,6 @@ func join[T fmt.Stringer](left [][]T, right []T) [][]T {
 	}
 
 	return joined
-}
-
-type empty struct{}
-
-// possibleCodes returns a channel that will send all possible codes, and cleanup function to end generation.
-func possibleCodes() (chan []int, func()) {
-	codes := make(chan []int)
-	cancel := make(chan empty)
-	go func() {
-		defer close(codes)
-		for i := 1; i < 6; i++ {
-			for j := 1; j < 6; j++ {
-				for k := 1; k < 6; k++ {
-					select {
-					case codes <- []int{i, j, k}:
-					case <-cancel:
-						return
-					}
-				}
-			}
-		}
-	}()
-
-	return codes, sync.OnceFunc(func() { close(cancel) })
 }
 
 func (s *Solver) getAllVerifierPermutations() [][]*verifiers.Verifier {
