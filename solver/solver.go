@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"slices"
+	"sync"
 
 	"github.com/caseymerrill/turingsolver/game"
 	"github.com/caseymerrill/turingsolver/set"
@@ -66,30 +67,45 @@ func (s *Solver) Solve() Solution {
 }
 
 func (s *Solver) InitialSolutions() []Solution {
-	solutions := make([]Solution, 0)
-	for _, verifierPermutation := range s.getAllVerifierPermutations() {
-		var validCode []int
-		for _, code := range possibleCodes {
-			if verifyCode(code, verifierPermutation) {
-				if validCode != nil {
-					// One solution per valid verifier permutation
-					validCode = nil
-					break
+	solutions := make(chan Solution, 100)
+	wg := sync.WaitGroup{}
+	for _, vp := range s.getAllVerifierPermutations() {
+		wg.Add(1)
+		go func(verifierPermutation []*verifiers.Verifier) {
+			defer wg.Done()
+			var validCode []int
+			for _, code := range possibleCodes {
+				if verifyCode(code, verifierPermutation) {
+					if validCode != nil {
+						// One solution per valid verifier permutation
+						validCode = nil
+						break
+					}
+
+					validCode = code
 				}
-
-				validCode = code
 			}
-		}
 
-		if validCode != nil && allValidatorsUseful(verifierPermutation) {
-			solutions = append(solutions, Solution{
-				Code:      validCode,
-				Verifiers: verifierPermutation,
-			})
-		}
+			if validCode != nil && allValidatorsUseful(verifierPermutation) {
+				solutions <- Solution{
+					Code:      validCode,
+					Verifiers: verifierPermutation,
+				}
+			}
+		}(vp)
 	}
 
-	return solutions
+	go func() {
+		wg.Wait()
+		close(solutions)
+	}()
+
+	var result []Solution
+	for solution := range solutions {
+		result = append(result, solution)
+	}
+
+	return result
 }
 
 func (s *Solver) Score() (int, int) {
