@@ -10,6 +10,7 @@ import (
 )
 
 func GenerateGame(numberOfVerifierCards int) game.Game {
+	solutionFinder := solver.Solver{}
 	for {
 		cards := make([]*verifiers.VerifierCard, 0, numberOfVerifierCards)
 		usedCards := set.Make[int]()
@@ -23,8 +24,9 @@ func GenerateGame(numberOfVerifierCards int) game.Game {
 			cards = append(cards, &verifiers.Cards[nextCard])
 		}
 
-		solutionGame := game.NewInteractiveGame(cards)
-		solutions := solver.NewSolver(solutionGame, func(s string) {}).InitialSolutions()
+		// Interactive game used here because it doesn't require solution/code
+		possibleGame := game.NewInteractiveGame(cards)
+		solutions := solutionFinder.InitialSolutions(possibleGame)
 		if len(solutions) > 0 {
 			correctSolution := rand.Intn(len(solutions))
 			return game.NewAutoGame(cards, solutions[correctSolution].Verifiers, solutions[correctSolution].Code)

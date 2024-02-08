@@ -28,7 +28,7 @@ func (g *AutoGame) String() string {
 		for i, verifier := range card.Verifiers {
 			verifierDescriptions[i] = verifier.Description
 		}
-		description += fmt.Sprintf("Verifier %v: %v\n", cardIndex + 1, strings.Join(verifierDescriptions, " | "))
+		description += fmt.Sprintf("Verifier %v: %v\n", cardIndex+1, strings.Join(verifierDescriptions, " | "))
 	}
 
 	return description
@@ -38,11 +38,11 @@ func (g *AutoGame) GetVerifierCards() []*verifiers.VerifierCard {
 	return g.verifierCards
 }
 
-func (g *AutoGame) AskQuestion(code []int, verifier int) bool {
+func (g *AutoGame) AskQuestion(player Player, code []int, verifier int) bool {
 	return g.actualVerfiers[verifier].Verify(code...)
 }
 
-func (g *AutoGame) MakeGuess(code []int) bool {
+func (g *AutoGame) MakeGuess(player Player, code []int) bool {
 	if len(code) != len(g.actualCode) {
 		return false
 	}
@@ -54,4 +54,8 @@ func (g *AutoGame) MakeGuess(code []int) bool {
 	}
 
 	return true
+}
+
+func (g *AutoGame) Rank() []Player {
+	return []Player{}
 }

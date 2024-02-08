@@ -22,12 +22,12 @@ func (g *InteractiveGame) GetVerifierCards() []*verifiers.VerifierCard {
 	return g.cards
 }
 
-func (g *InteractiveGame) AskQuestion(code []int, verifierIndex int) bool {
+func (g *InteractiveGame) AskQuestion(player Player, code []int, verifierIndex int) bool {
 	fmt.Printf("Test code: %v agains verifier %v: %v\n", code, verifierIndex+1, g.cards[verifierIndex])
 	return getBoolStdin()
 }
 
-func (g *InteractiveGame) MakeGuess(code []int) bool {
+func (g *InteractiveGame) MakeGuess(player Player, code []int) bool {
 	fmt.Printf("Make a guess: %v", code)
 	return getBoolStdin()
 }
@@ -44,6 +44,11 @@ func (g *InteractiveGame) String() string {
 	}
 
 	return description
+}
+
+func (g *InteractiveGame) Rank() []Player {
+	log.Fatal("Ranking not supported for interactive game")
+	return nil
 }
 
 func getBoolStdin() bool {

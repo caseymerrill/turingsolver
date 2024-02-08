@@ -20,8 +20,8 @@ import (
 const docString = `TuringSolver
 
 Usage:
-  turingsolver --interactive
-  turingsolver --gen=<number-of-games> [--n-cards=<number-of-cards>] [--profile]
+  turingsolver --interactive [--solver=<solver>]
+  turingsolver --gen=<number-of-games> [--n-cards=<number-of-cards>] [--profile] [--solver=<solver>]
   turingsolver --print-cards
   
  Options:
@@ -30,6 +30,7 @@ Usage:
   --interactive                Run the game in interactive mode.
   --gen=<number-of-games>      Generate <number-of-games> games.
   --n-cards=<number-of-cards>  Generate games with <number-of-cards> verifiers.
+  --solver=<solver>            Use indicated solver
   --profile					   Run with CPU profiler.`
 
 func main() {
@@ -57,14 +58,21 @@ func main() {
 		return
 	}
 
+	var solverToUse *solver.Solver
+	solverOpt, _ := opts.String("--solver")
+	if solverOpt == "" {
+		solverToUse = solver.FromString("best")
+	} else {
+		solverToUse = solver.FromString(solverOpt)
+	}
+
 	interactive, _ := opts.Bool("--interactive")
 	if interactive {
-		var interactiveGame game.Game
-		interactiveGame = createInteractiveGame()
-		solver := solver.NewSolver(interactiveGame, func(progress string) {
+		interactiveGame := createInteractiveGame()
+		solverToUse.SetProgressCallback(func(progress string) {
 			fmt.Println(progress)
 		})
-		solution := solver.Solve()
+		solution := solverToUse.Solve(interactiveGame)
 		fmt.Println("Solution:", solution)
 	}
 
@@ -82,8 +90,8 @@ func main() {
 			go func() {
 				defer wg.Done()
 				gameToSolve := game_generator.GenerateGame(nVerifiers)
-				solver := solver.NewSolver(gameToSolve, func(progress string) {})
-				solver.Solve()
+				var singleSolver solver.Solver = *solverToUse
+				singleSolver.Solve(gameToSolve)
 				// codesTested, questionsAsked := solver.Score()
 				// fmt.Printf("Solution: %v\nCodes tested: %v\nQuestions asked: %v\n\n", solution, codesTested, questionsAsked)
 			}()

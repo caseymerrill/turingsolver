@@ -3,7 +3,6 @@ package solver
 import (
 	"fmt"
 	"log"
-	"slices"
 	"sync"
 
 	"github.com/caseymerrill/turingsolver/game"
@@ -12,42 +11,72 @@ import (
 )
 
 type Solver struct {
-	game             game.Game
+	name string
+
+	// codeStrategy used for picking codes to guess
+	codeStrategy CodeStategy
+
+	// verifierStategy used for picking verifiers to query
+	verifierStategy VerifierStrategy
+
+	// progressCallback will be called with a string describing the progress so far, may be left nil
 	progressCallback ProgressCallback
-	solutions        []Solution
-	codesTested      int
-	questionsAsked   int
+
+	game      game.Game
+	solutions []game.Solution
 }
 
 type ProgressCallback func(string)
+type CodeStategy func(*Solver, []int) int
+type VerifierStrategy func(*Solver, int, []int) int
 
-func NewSolver(gameToSolve game.Game, progressCallback ProgressCallback) *Solver {
+// NotImplementedSolver can't solve any games, but can be used to get the inital solutions for game generation
+func NotImplementedSolver() *Solver {
 	return &Solver{
-		game:             gameToSolve,
-		progressCallback: progressCallback,
+		name: "Not Implemented",
+		codeStrategy: func(*Solver, []int) int {
+			panic("Not implemented")
+		},
+		verifierStategy: func(*Solver, int, []int) int {
+			panic("Not implemented")
+		},
 	}
 }
 
-func (s *Solver) Solve() Solution {
-	s.solutions = s.InitialSolutions()
+func (s *Solver) GetPlayerName() string {
+	return s.name
+}
+
+func (s *Solver) SetProgressCallback(callback ProgressCallback) *Solver {
+	s.progressCallback = callback
+	return s
+}
+
+// Reset clears game, and solution state, but keep configuration like progress callback
+func (s *Solver) reset() {
+	s.game = nil
+	s.solutions = nil
+}
+
+func (s *Solver) Solve(gameToSolve game.Game) game.Solution {
+	s.solutions = s.InitialSolutions(gameToSolve)
 	s.progressReport()
 
 	for len(s.solutions) > 0 && !s.hasSolution() {
-		code := s.bestCodeToAsk()
-		s.codesTested += 1
+		code := s.selectCode()
 
 		for i := 0; i < 3; i++ {
-			verifier := s.bestVerifiersToAsk(code)
+			verifier := s.selectVerifier(code)
 			if verifier == -1 {
-				s.progressCallback("Passing, no useful validators for code")
+				if s.progressCallback != nil {
+					s.progressCallback("No useful verifiers for code")
+				}
 				break
 			}
 
-			valid := s.game.AskQuestion(code, verifier)
-			s.questionsAsked += 1
+			valid := s.game.AskQuestion(s, code, verifier)
 			s.solutions = s.adjustSolutions(code, verifier, valid)
 			if s.hasSolution() {
-				s.finalReport()
 				return s.solutions[0]
 			}
 
@@ -57,19 +86,17 @@ func (s *Solver) Solve() Solution {
 
 	if len(s.solutions) == 0 {
 		log.Fatal("No solutions found")
-	} else {
-		resultReport := fmt.Sprintf("Found solution after testing %v codes and asking %v questions:\n", s.codesTested, s.questionsAsked)
-		s.progressCallback(resultReport)
 	}
 
-	s.finalReport()
 	return s.solutions[0]
 }
 
-func (s *Solver) InitialSolutions() []Solution {
-	solutions := make(chan Solution, 100)
+func (s *Solver) InitialSolutions(gameToSolve game.Game) []game.Solution {
+	s.reset()
+	s.game = gameToSolve
+	solutions := make(chan game.Solution, 100)
 	wg := sync.WaitGroup{}
-	for _, vp := range s.getAllVerifierPermutations() {
+	for vp := range s.getAllVerifierPermutations() {
 		wg.Add(1)
 		go func(verifierPermutation []*verifiers.Verifier) {
 			defer wg.Done()
@@ -87,7 +114,7 @@ func (s *Solver) InitialSolutions() []Solution {
 			}
 
 			if validCode != nil && allValidatorsUseful(verifierPermutation) {
-				solutions <- Solution{
+				solutions <- game.Solution{
 					Code:      validCode,
 					Verifiers: verifierPermutation,
 				}
@@ -100,7 +127,7 @@ func (s *Solver) InitialSolutions() []Solution {
 		close(solutions)
 	}()
 
-	var result []Solution
+	var result []game.Solution
 	for solution := range solutions {
 		result = append(result, solution)
 	}
@@ -108,21 +135,17 @@ func (s *Solver) InitialSolutions() []Solution {
 	return result
 }
 
-func (s *Solver) Score() (int, int) {
-	return s.codesTested, s.questionsAsked
-}
-
 func (s *Solver) progressReport() {
+	if s.progressCallback == nil {
+		return
+	}
+
 	progressReport := fmt.Sprintf("Found %v solutions:\n", len(s.solutions))
 	for _, solution := range s.solutions {
 		progressReport += fmt.Sprintf("  %v\n", solution)
 	}
-	s.progressCallback(progressReport)
-}
 
-func (s *Solver) finalReport() {
-	resultReport := fmt.Sprintf("Found solution after testing %v codes and asking %v questions:\n", s.codesTested, s.questionsAsked)
-	s.progressCallback(resultReport)
+	s.progressCallback(progressReport)
 }
 
 // hasSolution returns true if all possible solutions use the same code
@@ -143,41 +166,13 @@ func (s *Solver) hasSolution() bool {
 	return true
 }
 
-func (s *Solver) bestCodeToAsk() []int {
-	return s.mostEliminatedCases()
-}
-
-// mostEliminatedCases returns the code that could potentially eliminate the most cases (without goign to zero), based on the top three verifiers
-func (s *Solver) mostEliminatedCases() []int {
+func (s *Solver) selectCode() []int {
 	var bestCode []int
-	var bestScore int
-	currentSolutaionCount := len(s.solutions)
+	bestScore := -1
 	for _, code := range possibleCodes {
-		verifierScores := make([]int, len(s.game.GetVerifierCards()))
-		for i := range s.game.GetVerifierCards() {
-			score := 0
-
-			ifValidSolutionCount := len(s.adjustSolutions(code, i, true))
-			if ifValidSolutionCount > 0 {
-				score += currentSolutaionCount - len(s.adjustSolutions(code, i, true))
-			}
-
-			ifInvalidSolutionCount := len(s.adjustSolutions(code, i, false))
-			if ifInvalidSolutionCount > 0 {
-				score += currentSolutaionCount - len(s.adjustSolutions(code, i, false))
-			}
-
-			verifierScores[i] = score
-		}
-
-		slices.Sort(verifierScores)
-		codeScore := 0
-		for _, verifierScore := range verifierScores[len(verifierScores)-3:] {
-			codeScore += verifierScore
-		}
-
-		if codeScore > bestScore {
-			bestScore = codeScore
+		score := s.codeStrategy(s, code)
+		if score > bestScore {
+			bestScore = score
 			bestCode = code
 		}
 	}
@@ -185,25 +180,11 @@ func (s *Solver) mostEliminatedCases() []int {
 	return bestCode
 }
 
-func (s *Solver) firstCode() []int {
-	return s.solutions[0].Code
-}
-
-func (s *Solver) bestVerifiersToAsk(code []int) int {
+func (s *Solver) selectVerifier(code []int) int {
 	bestVerifierIndex := -1
 	bestVerifierScore := 0
 	for i := range s.game.GetVerifierCards() {
-		score := 0
-		ifValidSolutionCount := len(s.adjustSolutions(code, i, true))
-		if ifValidSolutionCount > 0 {
-			score += len(s.solutions) - ifValidSolutionCount
-		}
-
-		ifInvalidSolutionCount := len(s.adjustSolutions(code, i, false))
-		if ifInvalidSolutionCount > 0 {
-			score += len(s.solutions) - ifInvalidSolutionCount
-		}
-
+		score := s.verifierStategy(s, i, code)
 		if score > bestVerifierScore {
 			bestVerifierScore = score
 			bestVerifierIndex = i
@@ -213,7 +194,7 @@ func (s *Solver) bestVerifiersToAsk(code []int) int {
 	return bestVerifierIndex
 }
 
-func (s *Solver) adjustSolutions(code []int, verifierIndex int, valid bool) []Solution {
+func (s *Solver) adjustSolutions(code []int, verifierIndex int, valid bool) []game.Solution {
 	verifiersToKeep := set.Make[*verifiers.Verifier]()
 	for _, verifier := range s.game.GetVerifierCards()[verifierIndex].Verifiers {
 		if verifier.Verify(code...) == valid {
@@ -221,7 +202,7 @@ func (s *Solver) adjustSolutions(code []int, verifierIndex int, valid bool) []So
 		}
 	}
 
-	newSolutions := make([]Solution, 0, len(s.solutions))
+	newSolutions := make([]game.Solution, 0, len(s.solutions))
 	for _, solution := range s.solutions {
 		if verifiersToKeep.Contains(solution.Verifiers[verifierIndex]) {
 			newSolutions = append(newSolutions, solution)
@@ -266,29 +247,29 @@ func verifyCode(code []int, verifierPermutation []*verifiers.Verifier) bool {
 	return true
 }
 
-func join[T fmt.Stringer](left [][]T, right []T) [][]T {
-	joined := make([][]T, 0, len(left)*len(right))
-	for _, leftOriginal := range left {
-		for _, r := range right {
-			l := make([]T, len(leftOriginal))
-			copy(l, leftOriginal)
-			joined = append(joined, append(l, r))
-		}
-	}
+func (s *Solver) getAllVerifierPermutations() chan []*verifiers.Verifier {
+	result := make(chan []*verifiers.Verifier, 100)
 
-	return joined
+	go func() {
+		defer close(result)
+		s.verifierPermutationHelper([]int{}, result)
+	}()
+
+	return result
 }
 
-func (s *Solver) getAllVerifierPermutations() [][]*verifiers.Verifier {
-	cards := s.game.GetVerifierCards()
-	verifierPermutations := make([][]*verifiers.Verifier, len(cards[0].Verifiers))
-	for i, verifier := range cards[0].Verifiers {
-		verifierPermutations[i] = []*verifiers.Verifier{verifier}
+func (s *Solver) verifierPermutationHelper(indexesSoFar []int, result chan []*verifiers.Verifier) {
+	if len(indexesSoFar) == len(s.game.GetVerifierCards()) {
+		verifierPermutation := make([]*verifiers.Verifier, len(indexesSoFar))
+		for i, index := range indexesSoFar {
+			verifierPermutation[i] = s.game.GetVerifierCards()[i].Verifiers[index]
+		}
+
+		result <- verifierPermutation
+		return
 	}
 
-	for _, card := range cards[1:] {
-		verifierPermutations = join(verifierPermutations, card.Verifiers)
+	for i := 0; i < len(s.game.GetVerifierCards()[len(indexesSoFar)].Verifiers); i++ {
+		s.verifierPermutationHelper(append(indexesSoFar, i), result)
 	}
-
-	return verifierPermutations
 }
