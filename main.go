@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"runtime/pprof"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -21,7 +22,7 @@ const docString = `TuringSolver
 
 Usage:
   turingsolver --interactive [--solver=<solver>]
-  turingsolver --gen=<number-of-games> [--n-cards=<number-of-cards>] [--profile] [--solver=<solver>]
+  turingsolver --gen=<number-of-games> [--n-cards=<number-of-cards>] [--profile] [--solver=<solvers>...]
   turingsolver --print-cards
   
  Options:
@@ -30,7 +31,7 @@ Usage:
   --interactive                Run the game in interactive mode.
   --gen=<number-of-games>      Generate <number-of-games> games.
   --n-cards=<number-of-cards>  Generate games with <number-of-cards> verifiers.
-  --solver=<solver>            Use indicated solver
+  --solver=<solvers>           Use indicated solvers.
   --profile					   Run with CPU profiler.`
 
 func main() {
@@ -58,24 +59,30 @@ func main() {
 		return
 	}
 
-	var solverToUse *solver.Solver
-	solverOpt, _ := opts.String("--solver")
-	if solverOpt == "" {
-		solverToUse = solver.FromString("best")
+	var solvers []*solver.Solver
+	solverOpt := opts["--solver"]
+	if solverOpt == nil {
+		solvers = []*solver.Solver{solver.FromString("best")}
 	} else {
-		solverToUse = solver.FromString(solverOpt)
+		solvers = make([]*solver.Solver, len(solverOpt.([]string)))
+		for i, solverName := range solverOpt.([]string) {
+			solvers[i] = solver.FromString(solverName)
+		}
 	}
 
 	interactive, _ := opts.Bool("--interactive")
 	if interactive {
 		interactiveGame := createInteractiveGame()
-		solverToUse.SetProgressCallback(func(progress string) {
+		interactiveSolver := solvers[0]
+		interactiveSolver.SetProgressCallback(func(progress string) {
 			fmt.Println(progress)
 		})
-		solution := solverToUse.Solve(interactiveGame)
+		_, solution := interactiveSolver.Solve(interactiveGame)
 		fmt.Println("Solution:", solution)
 	}
 
+	winCount := make(map[string]int)
+	winCountLock := sync.Mutex{}
 	generateGames, _ := opts.Int("--gen")
 	if generateGames > 0 {
 		nVerifiers, _ := opts.Int("--n-cards")
@@ -84,20 +91,64 @@ func main() {
 		}
 
 		// games := make([]game.Game, generateGames)
-		wg := sync.WaitGroup{}
+		gameWaitGroup := sync.WaitGroup{}
 		for i := 0; i < generateGames; i++ {
-			wg.Add(1)
+			gameWaitGroup.Add(1)
 			go func() {
-				defer wg.Done()
+				defer gameWaitGroup.Done()
 				gameToSolve := game_generator.GenerateGame(nVerifiers)
-				var singleSolver solver.Solver = *solverToUse
-				singleSolver.Solve(gameToSolve)
-				// codesTested, questionsAsked := solver.Score()
-				// fmt.Printf("Solution: %v\nCodes tested: %v\nQuestions asked: %v\n\n", solution, codesTested, questionsAsked)
+				solverWaitGroup := sync.WaitGroup{}
+				for _, competingSolver := range solvers {
+					solverWaitGroup.Add(1)
+					go func(competingSolver *solver.Solver) {
+						defer solverWaitGroup.Done()
+						var singleSolver solver.Solver = *competingSolver
+						correct, solution := singleSolver.Solve(gameToSolve)
+						if !correct {
+							fmt.Println("Solver", competingSolver.GetPlayerName(), "failed to solve:", solution.Code)
+						}
+					}(competingSolver)
+				}
+
+				solverWaitGroup.Wait()
+
+				winCountLock.Lock()
+				defer winCountLock.Unlock()
+				rank := gameToSolve.Rank()
+				if len(rank) > 0 {
+					winners := rank[0]
+					// If there is a tie across the board, no one gets a win
+					if len(winners) != len(solvers) {
+						for _, winner := range rank[0] {
+							winCount[winner.GetPlayerName()]++
+						}
+					}
+				}
 			}()
 		}
 
-		wg.Wait()
+		gameWaitGroup.Wait()
+		type WinCount struct {
+			playerName string
+			wins       int
+		}
+		winners := make([]WinCount, 0, len(winCount))
+		for player, wins := range winCount {
+			winners = append(winners, WinCount{player, wins})
+		}
+
+		slices.SortFunc(winners, func(a, b WinCount) int {
+			return b.wins - a.wins
+		})
+
+		fmt.Println("Games generated:", game_generator.GamesGenrated.Load())
+		fmt.Println("Games thrown away:", game_generator.GamesThrownAway.Load())
+		fmt.Println("Average possible solutions:", game_generator.TotalPotentialSolutions.Load()/game_generator.GamesGenrated.Load())
+
+		fmt.Println("Winners:")
+		for i, winner := range winners {
+			fmt.Printf("\t%v: %v with %v wins\n", i+1, winner.playerName, winner.wins)
+		}
 	}
 }
 

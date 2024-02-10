@@ -2,12 +2,17 @@ package game_generator
 
 import (
 	"math/rand"
+	"sync/atomic"
 
 	"github.com/caseymerrill/turingsolver/game"
 	"github.com/caseymerrill/turingsolver/set"
 	"github.com/caseymerrill/turingsolver/solver"
 	"github.com/caseymerrill/turingsolver/verifiers"
 )
+
+var TotalPotentialSolutions atomic.Int32
+var GamesGenrated atomic.Int32
+var GamesThrownAway atomic.Int32
 
 func GenerateGame(numberOfVerifierCards int) game.Game {
 	solutionFinder := solver.Solver{}
@@ -28,8 +33,12 @@ func GenerateGame(numberOfVerifierCards int) game.Game {
 		possibleGame := game.NewInteractiveGame(cards)
 		solutions := solutionFinder.InitialSolutions(possibleGame)
 		if len(solutions) > 0 {
+			TotalPotentialSolutions.Add(int32(len(solutions)))
+			GamesGenrated.Add(1)
 			correctSolution := rand.Intn(len(solutions))
 			return game.NewAutoGame(cards, solutions[correctSolution].Verifiers, solutions[correctSolution].Code)
+		} else {
+			GamesThrownAway.Add(1)
 		}
 	}
 }

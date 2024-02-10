@@ -12,10 +12,8 @@ func Random() *Solver {
 
 func randomCodeStrategy(s *Solver, code []int) int {
 	for i := range s.game.GetVerifierCards() {
-		trueSolutionCount := len(s.adjustSolutions(code, i, true))
-		falseSolutionCount := len(s.adjustSolutions(code, i, false))
-		if (trueSolutionCount > 0 && trueSolutionCount < len(s.solutions)) ||
-		(falseSolutionCount > 0 && falseSolutionCount < len(s.solutions)) {
+		score := s.verifierStategy(s, i, code)
+		if score > 0 {
 			return rand.Intn(100) + 1
 		}
 	}

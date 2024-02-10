@@ -18,6 +18,11 @@ func NewInteractiveGame(cards []*verifiers.VerifierCard) Game {
 	}
 }
 
+func (g *InteractiveGame) Stats() map[Player]*PlayerMoves {
+	log.Fatal("Stats not supported for interactive game")
+	return nil
+}
+
 func (g *InteractiveGame) GetVerifierCards() []*verifiers.VerifierCard {
 	return g.cards
 }
@@ -46,7 +51,7 @@ func (g *InteractiveGame) String() string {
 	return description
 }
 
-func (g *InteractiveGame) Rank() []Player {
+func (g *InteractiveGame) Rank() [][]Player {
 	log.Fatal("Ranking not supported for interactive game")
 	return nil
 }

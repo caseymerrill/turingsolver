@@ -58,7 +58,7 @@ func (s *Solver) reset() {
 	s.solutions = nil
 }
 
-func (s *Solver) Solve(gameToSolve game.Game) game.Solution {
+func (s *Solver) Solve(gameToSolve game.Game) (bool, game.Solution) {
 	s.solutions = s.InitialSolutions(gameToSolve)
 	s.progressReport()
 
@@ -77,7 +77,7 @@ func (s *Solver) Solve(gameToSolve game.Game) game.Solution {
 			valid := s.game.AskQuestion(s, code, verifier)
 			s.solutions = s.adjustSolutions(code, verifier, valid)
 			if s.hasSolution() {
-				return s.solutions[0]
+				break
 			}
 
 			s.progressReport()
@@ -88,7 +88,7 @@ func (s *Solver) Solve(gameToSolve game.Game) game.Solution {
 		log.Fatal("No solutions found")
 	}
 
-	return s.solutions[0]
+	return s.game.MakeGuess(s, s.solutions[0].Code), s.solutions[0]
 }
 
 func (s *Solver) InitialSolutions(gameToSolve game.Game) []game.Solution {

@@ -11,10 +11,7 @@ type Game interface {
 	GetVerifierCards() []*verifiers.VerifierCard
 	AskQuestion(player Player, code []int, verifier int) bool
 	MakeGuess(player Player, code []int) bool
-	Rank() []Player
-}
-
-type Player interface {
-	GetPlayerName() string
-	Solve(game Game) Solution
+	// Rank returns the players in order of their performance. Ties go into the first slice
+	Rank() [][]Player
+	Stats() map[Player]*PlayerMoves
 }

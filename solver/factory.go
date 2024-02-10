@@ -13,9 +13,9 @@ func FromString(solverName string) *Solver {
 	case "combine":
 		return CombineEliminated()
 	case "optimistic":
-		fallthrough
+		return Optimistic()
 	case "pessimistic":
-		panic("Not implemnted")
+		return Pessimistic()
 	default:
 		panic("Unknown solver name: " + solverName)
 	}
