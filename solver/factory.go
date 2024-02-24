@@ -8,12 +8,12 @@ func FromString(solverName string) *Solver {
 		return Random()
 	case "notimplemented":
 		return NotImplementedSolver()
-	case "best":
-		fallthrough
 	case "combine":
 		return CombineEliminated()
 	case "optimistic":
 		return Optimistic()
+	case "best":
+		fallthrough
 	case "pessimistic":
 		return Pessimistic()
 	default:

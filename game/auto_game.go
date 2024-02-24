@@ -26,16 +26,6 @@ func NewAutoGame(verifierCards []*verifiers.VerifierCard, actualVerifiers []*ver
 	}
 }
 
-func (g *AutoGame) Stats() map[Player]*PlayerMoves {
-	g.playerStatsLock.Lock()
-	defer g.playerStatsLock.Unlock()
-	stats := make(map[Player]*PlayerMoves, len(g.playerStats))
-	for player, stat := range g.playerStats {
-		stats[player] = stat
-	}
-	return stats
-}
-
 func (g *AutoGame) String() string {
 	description := ""
 	for cardIndex, card := range g.verifierCards {
@@ -56,19 +46,25 @@ func (g *AutoGame) GetVerifierCards() []*verifiers.VerifierCard {
 func (g *AutoGame) AskQuestion(player Player, code []int, verifier int) bool {
 	g.playerStatsLock.Lock()
 	defer g.playerStatsLock.Unlock()
+
 	playerStats := g.playerStats[player]
 	if playerStats == nil {
 		playerStats = &PlayerMoves{player: player}
 		g.playerStats[player] = playerStats
 	}
 
-	playerStats.askedQuestion(code, g.verifierCards[verifier])
+	if err := playerStats.askedQuestion(code, g.verifierCards[verifier]); err != nil {
+		fmt.Println(err)
+		return false
+	}
+
 	return g.actualVerfiers[verifier].Verify(code...)
 }
 
 func (g *AutoGame) MakeGuess(player Player, code []int) (correct bool) {
 	g.playerStatsLock.Lock()
 	defer g.playerStatsLock.Unlock()
+
 	playerStats := g.playerStats[player]
 	if playerStats == nil {
 		playerStats = &PlayerMoves{player: player}
@@ -87,7 +83,11 @@ func (g *AutoGame) MakeGuess(player Player, code []int) (correct bool) {
 		}
 	}
 
-	g.playerStats[player].madeGuess(code, correct)
+	if err := playerStats.madeGuess(code, correct); err != nil {
+		fmt.Println(err)
+		return false
+	}
+
 	return
 }
 
@@ -95,17 +95,11 @@ func (g *AutoGame) Rank() [][]Player {
 	g.playerStatsLock.Lock()
 	defer g.playerStatsLock.Unlock()
 
-	if len(g.playerStats) == 0 {
-		fmt.Println("No player stats")
-	}
 	stats := make([]*PlayerMoves, 0, len(g.playerStats))
 	for _, playerStat := range g.playerStats {
 		if playerStat.guessedCorrectly.Value() {
 			stats = append(stats, playerStat)
 		}
-	}
-	if len(stats) == 0 {
-		fmt.Println("No one got it right")
 	}
 	slices.SortStableFunc(stats, sorter)
 

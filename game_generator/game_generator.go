@@ -14,7 +14,7 @@ var TotalPotentialSolutions atomic.Int32
 var GamesGenrated atomic.Int32
 var GamesThrownAway atomic.Int32
 
-func GenerateGame(numberOfVerifierCards int) game.Game {
+func GenerateGame(numberOfVerifierCards int, minSolutions int) game.Game {
 	solutionFinder := solver.Solver{}
 	for {
 		cards := make([]*verifiers.VerifierCard, 0, numberOfVerifierCards)
@@ -32,7 +32,7 @@ func GenerateGame(numberOfVerifierCards int) game.Game {
 		// Interactive game used here because it doesn't require solution/code
 		possibleGame := game.NewInteractiveGame(cards)
 		solutions := solutionFinder.InitialSolutions(possibleGame)
-		if len(solutions) > 0 {
+		if len(solutions) >= minSolutions {
 			TotalPotentialSolutions.Add(int32(len(solutions)))
 			GamesGenrated.Add(1)
 			correctSolution := rand.Intn(len(solutions))

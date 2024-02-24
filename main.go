@@ -6,10 +6,11 @@ import (
 	"log"
 	"os"
 	"runtime/pprof"
-	"slices"
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/caseymerrill/turingsolver/server"
 
 	"github.com/caseymerrill/turingsolver/game"
 	"github.com/caseymerrill/turingsolver/game_generator"
@@ -22,17 +23,20 @@ const docString = `TuringSolver
 
 Usage:
   turingsolver --interactive [--solver=<solver>]
-  turingsolver --gen=<number-of-games> [--n-cards=<number-of-cards>] [--profile] [--solver=<solvers>...]
+  turingsolver --server --gen=<number-of-games> [--n-cards=<number-of-cards> --min-solutions=<min-solutions>]
+  turingsolver --gen=<number-of-games> [--n-cards=<number-of-cards> --min-solutions=<min-solutions> --profile] [--solver=<solvers>...]
+  turingsolver --remote=<url> [--solver=<solvers>...]
   turingsolver --print-cards
   
  Options:
-  -h --help                    Show this screen.
-  --print-cards                Print the available verifier cards.
-  --interactive                Run the game in interactive mode.
-  --gen=<number-of-games>      Generate <number-of-games> games.
-  --n-cards=<number-of-cards>  Generate games with <number-of-cards> verifiers.
-  --solver=<solvers>           Use indicated solvers.
-  --profile					   Run with CPU profiler.`
+ -h --help                       Show this screen.
+ --print-cards                   Print the available verifier cards.
+ --interactive                   Run the game in interactive mode.
+--gen=<number-of-games>          Generate <number-of-games> games.
+--n-cards=<number-of-cards>      Generate games with <number-of-cards> verifiers.
+--min-solutions=<min-solutions>  Generate games with at least <min-solutions> solutions.
+--solver=<solvers>               Use indicated solvers.
+--profile					     Run with CPU profiler.`
 
 func main() {
 	opts, err := docopt.ParseDoc(docString)
@@ -70,6 +74,20 @@ func main() {
 		}
 	}
 
+	numberOfGamesToGenerate, _ := opts.Int("--gen")
+	runServer, _ := opts.Bool("--server")
+	remoteAdder, _ := opts.String("--remote")
+
+	minSolutions, _ := opts.Int("--min-solutions")
+	if minSolutions == 0 {
+		minSolutions = 2
+	}
+
+	nVerifiers, _ := opts.Int("--n-cards")
+	if nVerifiers == 0 {
+		nVerifiers = 4
+	}
+
 	interactive, _ := opts.Bool("--interactive")
 	if interactive {
 		interactiveGame := createInteractiveGame()
@@ -79,77 +97,85 @@ func main() {
 		})
 		_, solution := interactiveSolver.Solve(interactiveGame)
 		fmt.Println("Solution:", solution)
-	}
+	} else if runServer {
+		fmt.Println("Generating Games...")
+		games := generateGames(numberOfGamesToGenerate, nVerifiers, minSolutions)
+		fmt.Println("Starting Server...")
+		gameServer := server.NewGameServer(games)
+		gameServer.Listen()
+	} else if remoteAdder != "" {
+		wg := sync.WaitGroup{}
+		for _, solverToUse := range solvers {
+			remoteGames, err := game.JoinGames(remoteAdder, solverToUse.GetPlayerName())
+			if err != nil {
+				log.Fatal("Joining games : ", err)
+			}
 
-	winCount := make(map[string]int)
-	winCountLock := sync.Mutex{}
-	generateGames, _ := opts.Int("--gen")
-	if generateGames > 0 {
-		nVerifiers, _ := opts.Int("--n-cards")
-		if nVerifiers == 0 {
-			nVerifiers = 4
-		}
-
-		// games := make([]game.Game, generateGames)
-		gameWaitGroup := sync.WaitGroup{}
-		for i := 0; i < generateGames; i++ {
-			gameWaitGroup.Add(1)
-			go func() {
-				defer gameWaitGroup.Done()
-				gameToSolve := game_generator.GenerateGame(nVerifiers)
-				solverWaitGroup := sync.WaitGroup{}
-				for _, competingSolver := range solvers {
-					solverWaitGroup.Add(1)
-					go func(competingSolver *solver.Solver) {
-						defer solverWaitGroup.Done()
-						var singleSolver solver.Solver = *competingSolver
-						correct, solution := singleSolver.Solve(gameToSolve)
-						if !correct {
-							fmt.Println("Solver", competingSolver.GetPlayerName(), "failed to solve:", solution.Code)
-						}
-					}(competingSolver)
-				}
-
-				solverWaitGroup.Wait()
-
-				winCountLock.Lock()
-				defer winCountLock.Unlock()
-				rank := gameToSolve.Rank()
-				if len(rank) > 0 {
-					winners := rank[0]
-					// If there is a tie across the board, no one gets a win
-					if len(winners) != len(solvers) {
-						for _, winner := range rank[0] {
-							winCount[winner.GetPlayerName()]++
-						}
+			wg.Add(1)
+			go func(solverToUse *solver.Solver) {
+				defer wg.Done()
+				for _, remoteGame := range remoteGames {
+					correct, _ := solverToUse.Solve(remoteGame)
+					if !correct {
+						fmt.Println("Solver", solverToUse.GetPlayerName(), "failed to solve")
 					}
 				}
-			}()
+			}(solverToUse)
 		}
 
-		gameWaitGroup.Wait()
-		type WinCount struct {
-			playerName string
-			wins       int
-		}
-		winners := make([]WinCount, 0, len(winCount))
-		for player, wins := range winCount {
-			winners = append(winners, WinCount{player, wins})
-		}
+		wg.Wait()
+	} else if numberOfGamesToGenerate > 0 {
+		evaluateSolvers(numberOfGamesToGenerate, nVerifiers, minSolutions, solvers)
+	}
+}
 
-		slices.SortFunc(winners, func(a, b WinCount) int {
-			return b.wins - a.wins
-		})
-
-		fmt.Println("Games generated:", game_generator.GamesGenrated.Load())
-		fmt.Println("Games thrown away:", game_generator.GamesThrownAway.Load())
-		fmt.Println("Average possible solutions:", game_generator.TotalPotentialSolutions.Load()/game_generator.GamesGenrated.Load())
-
-		fmt.Println("Winners:")
-		for i, winner := range winners {
-			fmt.Printf("\t%v: %v with %v wins\n", i+1, winner.playerName, winner.wins)
+func evaluateSolvers(numberOfGamesToGenerate int, nVerifiers int, minSolutions int, solvers []*solver.Solver) {
+	fmt.Println("Generating Games...")
+	games := generateGames(numberOfGamesToGenerate, nVerifiers, minSolutions)
+	fmt.Println("Solving...")
+	gameWaitGroup := sync.WaitGroup{}
+	for _, gameToSolve := range games {
+		for _, competingSolver := range solvers {
+			gameWaitGroup.Add(1)
+			go func(competingSolver *solver.Solver, gameToSolve game.Game) {
+				defer gameWaitGroup.Done()
+				singleSolver := *competingSolver
+				correct, solution := singleSolver.Solve(gameToSolve)
+				if !correct {
+					fmt.Println("Solver", competingSolver.GetPlayerName(), "failed to solve:", solution.Code)
+				}
+			}(competingSolver, gameToSolve)
 		}
 	}
+
+	gameWaitGroup.Wait()
+	game.PrintWinCount(games)
+}
+
+func generateGames(numberOfGamesToGenerate, nVerifiers, minSolutions int) []game.Game {
+	games := make(chan game.Game, numberOfGamesToGenerate/10+1)
+	wg := sync.WaitGroup{}
+
+	for i := 0; i < numberOfGamesToGenerate; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			games <- game_generator.GenerateGame(nVerifiers, minSolutions)
+		}()
+
+	}
+
+	go func() {
+		wg.Wait()
+		close(games)
+	}()
+
+	result := make([]game.Game, 0, numberOfGamesToGenerate)
+	for g := range games {
+		result = append(result, g)
+	}
+
+	return result
 }
 
 func createInteractiveGame() game.Game {

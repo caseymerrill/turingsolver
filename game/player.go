@@ -1,6 +1,7 @@
 package game
 
 import (
+	"fmt"
 	"slices"
 
 	"github.com/caseymerrill/turingsolver/optional"
@@ -10,7 +11,7 @@ import (
 const questionsPerCode = 3
 
 type Player interface {
-	// GetName returns the name of the player
+	// GetPlayerName returns the name of the player
 	GetPlayerName() string
 }
 
@@ -29,9 +30,9 @@ type Question struct {
 	Card *verifiers.VerifierCard
 }
 
-func (p *PlayerMoves) askedQuestion(code []int, card *verifiers.VerifierCard) {
+func (p *PlayerMoves) askedQuestion(code []int, card *verifiers.VerifierCard) error {
 	if p.guessedCorrectly.HasValue() {
-		panic("Illegal move player has already guessed")
+		return fmt.Errorf("illegal move player has already guessed. Player: ", p.player.GetPlayerName(), " Code: ", code, " Card: ", card)
 	}
 
 	var lastCode []int
@@ -46,14 +47,17 @@ func (p *PlayerMoves) askedQuestion(code []int, card *verifiers.VerifierCard) {
 
 	p.questionsAsked = append(p.questionsAsked, Question{Code: code, Card: card})
 	p.questionsAskedThisCode += 1
+
+	return nil
 }
 
-func (p *PlayerMoves) madeGuess(code []int, correct bool) {
+func (p *PlayerMoves) madeGuess(code []int, correct bool) error {
 	if p.guessedCorrectly.HasValue() {
-		panic("Illegal move player has already guessed")
+		return fmt.Errorf("Illegal move player has already guessed. Player: ", p.player.GetPlayerName(), " Code: ", code)
 	}
-
 
 	p.codeGuessed = code
 	p.guessedCorrectly.Set(correct)
+
+	return nil
 }
