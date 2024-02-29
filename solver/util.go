@@ -16,7 +16,7 @@ func sumBiggestThree(scores []int) int {
 func topThreeVerifiersCodeStategy(s *Solver, code []int) int {
 	scores := make([]int, len(s.game.GetVerifierCards()))
 	for i := range s.game.GetVerifierCards() {
-		scores[i] = s.verifierStategy(s, i, code)
+		scores[i] = s.verifierStrategy(s, i, code)
 	}
 
 	return sumBiggestThree(scores)

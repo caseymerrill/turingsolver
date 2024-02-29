@@ -21,7 +21,7 @@ func PrintWinCount(games []Game) {
 	for _, solvedGame := range games {
 		rank := solvedGame.Rank()
 		// If there is a tie across the board, no one gets a win
-		if len(rank) > 0 && len(rank) != 1 {
+		if len(rank) > 0 {
 			for _, winner := range rank[0] {
 				winCount[winner.GetPlayerName()]++
 			}

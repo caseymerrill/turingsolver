@@ -6,9 +6,9 @@ import (
 
 func Optimistic() *Solver {
 	return &Solver{
-		name:            "Optimistic",
-		codeStrategy:    topThreeVerifiersCodeStategy,
-		verifierStategy: optimisticVerifierStrategy,
+		name:             "Optimistic",
+		codeStrategy:     topThreeVerifiersCodeStategy,
+		verifierStrategy: optimisticVerifierStrategy,
 	}
 }
 

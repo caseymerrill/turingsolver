@@ -14,21 +14,25 @@ type Solver struct {
 	name string
 
 	// codeStrategy used for picking codes to guess
-	codeStrategy CodeStategy
+	codeStrategy CodeStrategy
 
-	// verifierStategy used for picking verifiers to query
-	verifierStategy VerifierStrategy
+	// verifierStrategy used for picking verifiers to query
+	verifierStrategy VerifierStrategy
 
 	// progressCallback will be called with a string describing the progress so far, may be left nil
 	progressCallback ProgressCallback
+
+	// verifiersTestedThisCode is the number of verifiers tested for the current code
+	verifiersTestedThisCode int
 
 	game      game.Game
 	solutions []game.Solution
 }
 
 type ProgressCallback func(string)
-type CodeStategy func(*Solver, []int) int
+type CodeStrategy func(*Solver, []int) int
 type VerifierStrategy func(*Solver, int, []int) int
+type CombinedStrategy func(*Solver, []int) (int, []int)
 
 // NotImplementedSolver can't solve any games, but can be used to get the inital solutions for game generation
 func NotImplementedSolver() *Solver {
@@ -37,7 +41,7 @@ func NotImplementedSolver() *Solver {
 		codeStrategy: func(*Solver, []int) int {
 			panic("Not implemented")
 		},
-		verifierStategy: func(*Solver, int, []int) int {
+		verifierStrategy: func(*Solver, int, []int) int {
 			panic("Not implemented")
 		},
 	}
@@ -62,11 +66,14 @@ func (s *Solver) Solve(gameToSolve game.Game) (bool, game.Solution) {
 	s.solutions = s.InitialSolutions(gameToSolve)
 	s.progressReport()
 
+	var codesTested [][]int
 	for len(s.solutions) > 0 && !s.hasSolution() {
 		code := s.selectCode()
 
 		for i := 0; i < 3; i++ {
-			verifier := s.selectVerifier(code)
+			var verifier int
+			verifier = s.selectVerifier(code)
+
 			if verifier == -1 {
 				if s.progressCallback != nil {
 					s.progressCallback("No useful verifiers for code")
@@ -75,12 +82,24 @@ func (s *Solver) Solve(gameToSolve game.Game) (bool, game.Solution) {
 			}
 
 			valid := s.game.AskQuestion(s, code, verifier)
+			s.verifiersTestedThisCode += 1
 			s.solutions = s.adjustSolutions(code, verifier, valid)
 			if s.hasSolution() {
 				break
 			}
 
 			s.progressReport()
+		}
+
+		codesTested = append(codesTested, code)
+		if len(codesTested) > 100 {
+			fmt.Println(s.GetPlayerName(), " has tested 100 codes, giving up")
+			fmt.Printf("Codes tested:\n%+v\n", codesTested)
+			fmt.Println("Solutions:")
+			for _, solution := range s.solutions {
+				fmt.Printf("\t%+v\n", solution)
+			}
+			return false, game.Solution{}
 		}
 	}
 
@@ -167,10 +186,12 @@ func (s *Solver) hasSolution() bool {
 }
 
 func (s *Solver) selectCode() []int {
-	var bestCode []int
 	bestScore := -1
+	var bestCode []int
 	for _, code := range possibleCodes {
-		score := s.codeStrategy(s, code)
+		var score int
+		score = s.codeStrategy(s, code)
+
 		if score > bestScore {
 			bestScore = score
 			bestCode = code
@@ -184,7 +205,7 @@ func (s *Solver) selectVerifier(code []int) int {
 	bestVerifierIndex := -1
 	bestVerifierScore := 0
 	for i := range s.game.GetVerifierCards() {
-		score := s.verifierStategy(s, i, code)
+		score := s.verifierStrategy(s, i, code)
 		if score > bestVerifierScore {
 			bestVerifierScore = score
 			bestVerifierIndex = i

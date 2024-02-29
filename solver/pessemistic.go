@@ -2,9 +2,9 @@ package solver
 
 func Pessimistic() *Solver {
 	return &Solver{
-		name:            "Pessimistic",
-		codeStrategy:    topThreeVerifiersCodeStategy,
-		verifierStategy: pessimisticVerifierStrategy,
+		name:             "Pessimistic",
+		codeStrategy:     topThreeVerifiersCodeStategy,
+		verifierStrategy: pessimisticVerifierStrategy,
 	}
 }
 

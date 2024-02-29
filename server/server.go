@@ -154,8 +154,15 @@ func (s *GameServer) Authenticate(c *gin.Context) {
 	playerName := session.Get("playerName")
 	s.playersLock.RLock()
 	defer s.playersLock.RUnlock()
-	if player := s.players[playerName.(string)]; player == nil {
-		c.JSON(401, gin.H{"error": "Not authenticated"})
+	playerNameStr, ok := playerName.(string)
+	if !ok {
+		c.JSON(401, gin.H{"error": "Not authenticated, no player name set."})
+		c.Abort()
+		return
+	}
+
+	if player := s.players[playerNameStr]; player == nil {
+		c.JSON(401, gin.H{"error": "Not authenticated, player not fount."})
 		c.Abort()
 		return
 	} else {

@@ -2,9 +2,9 @@ package solver
 
 func CombineEliminated() *Solver {
 	return &Solver{
-		name:            "CombineEliminated",
-		codeStrategy:    topThreeVerifiersCodeStategy,
-		verifierStategy: scoreVerifierWithMostEliminations,
+		name:             "CombineEliminated",
+		codeStrategy:     topThreeVerifiersCodeStategy,
+		verifierStrategy: scoreVerifierWithMostEliminations,
 	}
 }
 

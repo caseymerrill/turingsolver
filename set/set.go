@@ -22,3 +22,21 @@ func (s Set[T]) Contains(item T) bool {
 	_, ok := s[item]
 	return ok
 }
+
+func (s Set[T]) Intersection(other Set[T]) Set[T] {
+	intersection := Make[T]()
+	for item := range s {
+		if other.Contains(item) {
+			intersection.Add(item)
+		}
+	}
+	return intersection
+}
+
+func (s Set[T]) ToSlice() []T {
+	slice := make([]T, 0, len(s))
+	for item := range s {
+		slice = append(slice, item)
+	}
+	return slice
+}
