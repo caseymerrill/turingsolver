@@ -20,7 +20,7 @@ type Solver struct {
 	verifierStrategy VerifierStrategy
 
 	// progressCallback will be called with a string describing the progress so far, may be left nil
-	progressCallback ProgressCallback
+	progressCallback game.ProgressCallback
 
 	// verifiersTestedThisCode is the number of verifiers tested for the current code
 	verifiersTestedThisCode int
@@ -29,7 +29,6 @@ type Solver struct {
 	solutions []game.Solution
 }
 
-type ProgressCallback func(string)
 type CodeStrategy func(*Solver, []int) int
 type VerifierStrategy func(*Solver, int, []int) int
 type CombinedStrategy func(*Solver, []int) (int, []int)
@@ -51,9 +50,13 @@ func (s *Solver) GetPlayerName() string {
 	return s.name
 }
 
-func (s *Solver) SetProgressCallback(callback ProgressCallback) *Solver {
+func (s *Solver) Clone() game.Player {
+	s2 := *s
+	return &s2
+}
+
+func (s *Solver) SetProgressCallback(callback game.ProgressCallback) {
 	s.progressCallback = callback
-	return s
 }
 
 // Reset clears game, and solution state, but keep configuration like progress callback

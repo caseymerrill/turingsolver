@@ -28,13 +28,9 @@ type RankRequest struct {
 }
 
 type RankResponse struct {
-	Rankings [][]*RemotePlayer `json:"rankings"`
+	Rankings [][]APIPlayer `json:"rankings"`
 }
 
-type RemotePlayer struct {
+type APIPlayer struct {
 	Name string `json:"name"`
-}
-
-func (p *RemotePlayer) GetPlayerName() string {
-	return p.Name
 }

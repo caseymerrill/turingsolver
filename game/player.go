@@ -10,9 +10,14 @@ import (
 
 const questionsPerCode = 3
 
+type ProgressCallback func(string)
+
 type Player interface {
 	// GetPlayerName returns the name of the player
 	GetPlayerName() string
+	Solve(Game) (bool, Solution)
+	SetProgressCallback(ProgressCallback)
+	Clone() Player
 }
 
 type PlayerMoves struct {

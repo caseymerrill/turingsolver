@@ -63,12 +63,12 @@ func main() {
 		return
 	}
 
-	var solvers []*solver.Solver
+	var solvers []game.Player
 	solverOpt := opts["--solver"]
 	if solverOpt == nil {
-		solvers = []*solver.Solver{solver.FromString("best")}
+		solvers = []game.Player{solver.FromString("best")}
 	} else {
-		solvers = make([]*solver.Solver, len(solverOpt.([]string)))
+		solvers = make([]game.Player, len(solverOpt.([]string)))
 		for i, solverName := range solverOpt.([]string) {
 			solvers[i] = solver.FromString(solverName)
 		}
@@ -112,7 +112,7 @@ func main() {
 			}
 
 			wg.Add(1)
-			go func(solverToUse *solver.Solver) {
+			go func(solverToUse game.Player) {
 				defer wg.Done()
 				for _, remoteGame := range remoteGames {
 					correct, _ := solverToUse.Solve(remoteGame)
@@ -129,7 +129,7 @@ func main() {
 	}
 }
 
-func evaluateSolvers(numberOfGamesToGenerate int, nVerifiers int, minSolutions int, solvers []*solver.Solver) {
+func evaluateSolvers(numberOfGamesToGenerate int, nVerifiers int, minSolutions int, solvers []game.Player) {
 	fmt.Println("Generating Games...")
 	games := generateGames(numberOfGamesToGenerate, nVerifiers, minSolutions)
 	fmt.Println("Solving...")
@@ -137,9 +137,9 @@ func evaluateSolvers(numberOfGamesToGenerate int, nVerifiers int, minSolutions i
 	for _, gameToSolve := range games {
 		for _, competingSolver := range solvers {
 			gameWaitGroup.Add(1)
-			go func(competingSolver *solver.Solver, gameToSolve game.Game) {
+			go func(competingSolver game.Player, gameToSolve game.Game) {
 				defer gameWaitGroup.Done()
-				singleSolver := *competingSolver
+				singleSolver := competingSolver.Clone()
 				correct, solution := singleSolver.Solve(gameToSolve)
 				if !correct {
 					fmt.Println("Solver", competingSolver.GetPlayerName(), "failed to solve:", solution.Code)

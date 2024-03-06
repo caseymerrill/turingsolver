@@ -41,7 +41,7 @@ func (s *GameServer) Join(c *gin.Context) {
 		return
 	}
 
-	s.players[request.PlayerName] = &types.RemotePlayer{Name: request.PlayerName}
+	s.players[request.PlayerName] = &game.RemotePlayer{Name: request.PlayerName}
 
 	session := sessions.Default(c)
 	session.Set("playerName", request.PlayerName)
@@ -93,7 +93,7 @@ func (s *GameServer) AskQuestion(c *gin.Context) {
 		return
 	}
 
-	check := currentGame.AskQuestion(player.(*types.RemotePlayer), request.Code, request.VerifierIndex)
+	check := currentGame.AskQuestion(player.(*game.RemotePlayer), request.Code, request.VerifierIndex)
 	c.JSON(200, types.BinaryResponse{Result: check})
 }
 
@@ -116,7 +116,7 @@ func (s *GameServer) MakeGuess(c *gin.Context) {
 	}
 
 	currentGame := s.games[request.GameIndex]
-	result := currentGame.MakeGuess(player.(*types.RemotePlayer), request.Code)
+	result := currentGame.MakeGuess(player.(*game.RemotePlayer), request.Code)
 
 	s.printWinCount()
 
@@ -138,11 +138,13 @@ func (s *GameServer) GetRank(c *gin.Context) {
 	rankings := currentGame.Rank()
 
 	// Convert to remote players
-	remoteRankings := make([][]*types.RemotePlayer, len(rankings))
+	remoteRankings := make([][]types.APIPlayer, len(rankings))
 	for i, ranking := range rankings {
-		remoteRankings[i] = make([]*types.RemotePlayer, len(ranking))
+		remoteRankings[i] = make([]types.APIPlayer, len(ranking))
 		for j, player := range ranking {
-			remoteRankings[i][j] = player.(*types.RemotePlayer)
+			remoteRankings[i][j] = types.APIPlayer{
+				Name: player.GetPlayerName(),
+			}
 		}
 	}
 
