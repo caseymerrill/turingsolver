@@ -488,3 +488,17 @@ func (vc VerifierCard) String() string {
 	}
 	return strings.Join(verifierDescriptions, " | ")
 }
+
+func (vc VerifierCard) Combine(other VerifierCard) VerifierCard {
+	verifiers := make([]*Verifier, len(vc.Verifiers) + len(other.Verifiers))
+	nCopied := copy(verifiers, vc.Verifiers)
+	copy(verifiers[nCopied:], other.Verifiers)
+	lowCardNumber := min(vc.CardNumber, other.CardNumber)
+	highCardNumber := max(vc.CardNumber, other.CardNumber)
+	cardNumber := lowCardNumber * 1000 + highCardNumber
+
+	return VerifierCard{
+		CardNumber: cardNumber,
+		Verifiers: verifiers,
+	}
+}

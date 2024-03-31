@@ -206,13 +206,25 @@ func createInteractiveGame() game.Game {
 			continue
 		}
 
-		if len(verifiers.Cards) < cardNumber || cardNumber < 1 {
+		if cardNumber > 1002 { // 1002 is the lowest Extreme code (low number is always first)
+			lowNumber := cardNumber / 1000
+			highNumber := cardNumber % 1000
+
+			if verifyCardNumber(lowNumber) && verifyCardNumber(highNumber) {
+				fmt.Println("Adding XTREAM card:", lowNumber, ":", highNumber)
+				xtreamCard := verifiers.Cards[lowNumber-1].Combine(verifiers.Cards[highNumber-1])
+				cards = append(cards, &xtreamCard)
+			} else {
+				fmt.Println("No XTREAM card with that number:", cardNumber, ":", lowNumber, ":", highNumber)
+				continue
+			}
+		} else if verifyCardNumber(cardNumber) {
+			fmt.Println("Adding: ", verifiers.Cards[cardNumber-1])
+			cards = append(cards, &verifiers.Cards[cardNumber-1])
+		} else {
 			fmt.Println("No card with that number")
 			continue
 		}
-
-		fmt.Println("Adding: ", verifiers.Cards[cardNumber-1])
-		cards = append(cards, &verifiers.Cards[cardNumber-1])
 	}
 
 	if reader.Err() != nil {
@@ -220,6 +232,10 @@ func createInteractiveGame() game.Game {
 	}
 
 	return game.NewInteractiveGame(cards)
+}
+
+func verifyCardNumber(cardNumber int) bool {
+	return cardNumber <= len(verifiers.Cards) && cardNumber > 0
 }
 
 func printAllVerifierCards() {
